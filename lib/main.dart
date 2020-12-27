@@ -24,13 +24,10 @@ class _CanvasPaintingState extends State<CanvasPainting> {
   GlobalKey globalKey = GlobalKey();
 
   List<TouchPoints> points = List();
-  double opacity = 1.0;
-  StrokeCap strokeType = StrokeCap.round;
-  double strokeWidth = 3.0;
-  Color selectedColor = Colors.black;
   File _image;
-  int height;
-  int width;
+  int height = 0;
+  int width = 0;
+  GlobalKey _keyImage = GlobalKey();
   String text = 'Loading...';
   final picker = ImagePicker();
 
@@ -83,7 +80,7 @@ class _CanvasPaintingState extends State<CanvasPainting> {
   }
 
   Future _getImage() async {
-    final pickedFile = await picker.getImage(source: ImageSource.gallery);
+    final pickedFile = await picker.getImage(source: ImageSource.gallery, maxHeight: 650);
     if (pickedFile != null) {
       _image = File(pickedFile.path);
       var decodedImage = await decodeImageFromList(_image.readAsBytesSync());
@@ -102,66 +99,60 @@ class _CanvasPaintingState extends State<CanvasPainting> {
     });
   }
 
+  _onTapDown(TapDownDetails details) {
+    var x = details.globalPosition.dx;
+    var y = details.globalPosition.dy;
+    // or user the local position method to get the offset
+    print(details.localPosition);
+    print("tap down " + x.toString() + ", " + y.toString());
+  }
+
+  _onTapUp(TapUpDetails details) {
+    var x = details.globalPosition.dx;
+    var y = details.globalPosition.dy;
+    // or user the local position method to get the offset
+    print(details.localPosition);
+    print("tap up " + x.toString() + ", " + y.toString());
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(
-        body:GestureDetector(
-          onPanUpdate: (details) {
-            setState(() {
-              RenderBox renderBox = context.findRenderObject();
-              points.add(TouchPoints(
-                  points: renderBox.globalToLocal(details.globalPosition),
-                  paint: Paint()
-                    ..strokeCap = strokeType
-                    ..isAntiAlias = true
-                    ..color = selectedColor.withOpacity(opacity)
-                    ..strokeWidth = strokeWidth));
-            });
-          },
-          onPanStart: (details) {
-            setState(() {
-              RenderBox renderBox = context.findRenderObject();
-              points.add(TouchPoints(
-                  points: renderBox.globalToLocal(details.globalPosition),
-                  paint: Paint()
-                    ..strokeCap = strokeType
-                    ..isAntiAlias = true
-                    ..color = selectedColor.withOpacity(opacity)
-                    ..strokeWidth = strokeWidth));
-            });
-          },
-          onPanEnd: (details) {
-            setState(() {
-              points.add(null);
-            });
-          },
-          child: RepaintBoundary(
+        body: RepaintBoundary(
             key: globalKey,
-            child: Stack(
-              children: <Widget>[
-                Center(
-                  child: Container(
-                      decoration: BoxDecoration(
-                        image: DecorationImage(
-                          image: _image == null
-                              ? MemoryImage(kTransparentImage)
-                              : FileImage(_image),
-                        ),
-                      )),
-                ),
-                CustomPaint(
-                  size: Size.infinite,
-                  painter: MyPainter(
-                    pointsList: points,
+            child: Center(
+              child: Container(
+                key: _keyImage,
+                width: width.toDouble(),
+                height: height.toDouble(),
+                decoration: BoxDecoration(
+                  image: DecorationImage(
+                    image: _image == null
+                        ? MemoryImage(kTransparentImage)
+                        : FileImage(_image),
                   ),
                 ),
-              ],
+                child:
+                GestureDetector(
+                  onTapDown: (details) {
+                    setState(() {
+                      RenderBox renderBox = context.findRenderObject();
+                      points.add(TouchPoints(
+                          points: renderBox.globalToLocal(details.localPosition),));
+                    });
+                  },
+                  child:                     CustomPaint(
+                    size: Size.infinite,
+                    painter: MyPainter(
+                      pointsList: points,
+                    ),
+                  ),
+                ),
+                ),
+              ),
             ),
-          ),
-        ),
         floatingActionButton: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisAlignment: MainAxisAlignment.end,
@@ -177,7 +168,7 @@ class _CanvasPaintingState extends State<CanvasPainting> {
                   }),
               SizedBox(height: 5),
               FloatingActionButton(
-                onPressed: _getImage,
+                onPressed: () async{await _getImage();},
                 tooltip: 'Increment',
                 child: Icon(Icons.add),
               ),
@@ -189,24 +180,6 @@ class _CanvasPaintingState extends State<CanvasPainting> {
                 child: Icon(Icons.send),
               ),
             ]
-        ),
-      ),
-    );
-  }
-
-  Widget colorMenuItem(Color color) {
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          selectedColor = color;
-        });
-      },
-      child: ClipOval(
-        child: Container(
-          padding: const EdgeInsets.only(bottom: 8.0),
-          height: 36,
-          width: 36,
-          color: color,
         ),
       ),
     );
@@ -223,21 +196,16 @@ class MyPainter extends CustomPainter {
   //This is where we can draw on canvas.
   @override
   void paint(Canvas canvas, Size size) {
-    for (int i = 0; i < pointsList.length - 1; i++) {
+    for (int i = 0; i < pointsList.length - 1; i= i+2) {
       print(pointsList[i].points.dx);print(pointsList[i].points.dy);
       if (pointsList[i] != null && pointsList[i + 1] != null) {
         //Drawing line when two consecutive points are available
-        canvas.drawLine(pointsList[i].points, pointsList[i + 1].points,
-            pointsList[i].paint);
-      } else if (pointsList[i] != null && pointsList[i + 1] == null) {
-        offsetPoints.clear();
-        offsetPoints.add(pointsList[i].points);
-        offsetPoints.add(Offset(
-            pointsList[i].points.dx + 0.1, pointsList[i].points.dy + 0.1));
-
-        //Draw points when two points are not next to each other
-        canvas.drawPoints(
-            ui.PointMode.points, offsetPoints, pointsList[i].paint);
+        canvas.drawRect(
+          new Rect.fromLTRB(
+              pointsList[i].points.dx, pointsList[i].points.dy, pointsList[i+1].points.dx, pointsList[i+1].points.dy
+          ),
+          new Paint()..color = new Color(0xFF0099FF),
+        );
       }
     }
   }
@@ -250,13 +218,9 @@ class MyPainter extends CustomPainter {
 
 //Class to define a point touched at canvas
 class TouchPoints {
-  Paint paint;
   Offset points;
-  TouchPoints({this.points, this.paint});
+  TouchPoints({this.points});
 }
-
-
-
 
 
 
