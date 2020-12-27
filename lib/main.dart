@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'dart:convert' as convert;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:image_picker/image_picker.dart';
@@ -29,38 +30,52 @@ class _CanvasPaintingState extends State<CanvasPainting> {
   int width = 0;
   GlobalKey _keyImage = GlobalKey();
   String text = 'Loading...';
+  StateSetter _setState;
   final picker = ImagePicker();
 
-  _showAlertDialog(BuildContext context) {
-    AlertDialog alert = AlertDialog(
-      title: Center(child: Text(text)),
-      actions: <Widget>[
-        new FlatButton(
-          child: new Text("Copy"),
-          onPressed: () {Clipboard.setData(new ClipboardData(text: text));},
-        ),
-      ],
-    );
 
+
+  _showAlertDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return alert;
+
+          return StatefulBuilder(  // You need this, notice the parameters below:
+            builder: (BuildContext context, StateSetter setState) {
+              _setState = setState;
+              return AlertDialog (
+                title: Center(child: Text(text),),
+                actions: <Widget>[
+                  FlatButton(onPressed: (){Clipboard.setData(new ClipboardData(text:text));}, child: Text("Zkopírovat"))
+                ],
+              );
+            },
+          );
       },
     );
   }
 
   Future _getText() async {
-    String coordinates = "0,0,${height},${width}";
+    text="Loading...";
+    String coordinates ="";
+    if(points.length > 0) {
+      coordinates = "";
+      for (int i = 0; i < points.length-1; i++) {
+        coordinates = coordinates + ((points[i].points.dx).toInt()).toString() + "," + ((points[i].points.dy).toInt()).toString() + "," ;
+      }
+      coordinates = coordinates + ((points[points.length-1].points.dx).toInt()).toString() + "," + ((points[points.length-1].points.dy).toInt()).toString();
+    }
     var request = http.MultipartRequest(
         "POST",
         Uri.parse("https://georgian101.herokuapp.com/api/v1/extract_text"));
-    request.fields['coordinates'] = coordinates;
+    if(coordinates.isNotEmpty) {
+      request.fields['coordinates'] = coordinates;
+    }
     request.files.add(await http.MultipartFile.fromPath(
       'image',
       _image.path,
     ));
-
+    _showAlertDialog(context);
     request.send().then((result) async {
       http.Response.fromStream(result)
           .then((response) {
@@ -68,10 +83,14 @@ class _CanvasPaintingState extends State<CanvasPainting> {
         {
           Map mapJson = json.decode(utf8.decode(response.bodyBytes));
           print(mapJson["text"]);
-          setState(() {
-            text= mapJson["text"];
+          _setState(() {
+            text = mapJson["text"];
           });
-          _showAlertDialog(context);
+        }
+        else{
+          _setState(() {
+            text = "Chyba, kontaktujte svého poskytovatele";
+          });
         }
       });
     }).catchError((err) => print('error : '+err.toString()))
@@ -86,8 +105,6 @@ class _CanvasPaintingState extends State<CanvasPainting> {
       var decodedImage = await decodeImageFromList(_image.readAsBytesSync());
       width= decodedImage.width;
       height= decodedImage.height;
-      print(width);
-      print(height);
     }
     setState(() {
       if (pickedFile != null) {
@@ -99,21 +116,6 @@ class _CanvasPaintingState extends State<CanvasPainting> {
     });
   }
 
-  _onTapDown(TapDownDetails details) {
-    var x = details.globalPosition.dx;
-    var y = details.globalPosition.dy;
-    // or user the local position method to get the offset
-    print(details.localPosition);
-    print("tap down " + x.toString() + ", " + y.toString());
-  }
-
-  _onTapUp(TapUpDetails details) {
-    var x = details.globalPosition.dx;
-    var y = details.globalPosition.dy;
-    // or user the local position method to get the offset
-    print(details.localPosition);
-    print("tap up " + x.toString() + ", " + y.toString());
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -158,25 +160,30 @@ class _CanvasPaintingState extends State<CanvasPainting> {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               FloatingActionButton(
+                backgroundColor: Colors.indigo,
+                onPressed: () async{await _getImage();},
+                tooltip: 'Vybrat obrazek',
+                child: Icon(Icons.add),
+              ),
+              SizedBox(height: 5),
+              FloatingActionButton(
                   heroTag: "erase",
                   child: Icon(Icons.clear),
                   tooltip: "Erase",
-                  onPressed: () {
+                  backgroundColor: points.length == 0 ? Colors.blueGrey.withOpacity(0.5): Colors.indigo,
+                  onPressed: points.length == 0 ? null : () {
                     setState(() {
                       points.clear();
                     });
                   }),
               SizedBox(height: 5),
               FloatingActionButton(
-                onPressed: () async{await _getImage();},
-                tooltip: 'Increment',
-                child: Icon(Icons.add),
-              ),
-              SizedBox(height: 5),
-              FloatingActionButton(
-                onPressed: () async { await _getText();
+                backgroundColor: _image == null ? Colors.blueGrey.withOpacity(0.5): Colors.indigo,
+                onPressed: _image == null
+                    ? null
+                    : () async { await _getText();
                 },
-                tooltip: 'Increment',
+                tooltip: 'Odeslat',
                 child: Icon(Icons.send),
               ),
             ]
@@ -204,7 +211,7 @@ class MyPainter extends CustomPainter {
           new Rect.fromLTRB(
               pointsList[i].points.dx, pointsList[i].points.dy, pointsList[i+1].points.dx, pointsList[i+1].points.dy
           ),
-          new Paint()..color = new Color(0xFF0099FF),
+          new Paint()..color = new Color.fromRGBO(0, 127, 255, 0.7)
         );
       }
     }
