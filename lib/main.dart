@@ -1,8 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui' as ui;
-import 'dart:convert' as convert;
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -10,8 +7,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:transparent_image/transparent_image.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
-
-
+import 'package:screenshot/screenshot.dart';
+import 'package:translator/translator.dart';
 
 void main() {
   runApp(MaterialApp(home: CanvasPainting()));
@@ -23,39 +20,62 @@ class CanvasPainting extends StatefulWidget {
 }
 
 class _CanvasPaintingState extends State<CanvasPainting> {
+  ScreenshotController screenshotController = ScreenshotController();
   GlobalKey globalKey = GlobalKey();
   List<TouchPoints> points = List();
+  List<TouchPoints> tempPoints = List();
+  final translator = GoogleTranslator();
   File _image;
+  File imagePath;
+  bool httpRequest = false;
   int height = 0;
   int width = 0;
   double widthScreen;
   GlobalKey _keyImage = GlobalKey();
-  String text = 'Loading...';
+  String text = 'Dešifruji...';
   StateSetter _setState;
   String coordinates ="";
   final picker = ImagePicker();
-
+  double heightScreen;
 
   _showAlertDialog(BuildContext context) {
-
     var pressed = false ;
+    var translated = false;
     showDialog(
       context: context,
       barrierColor: Colors.white.withOpacity(0.1),
       builder: (BuildContext context) {
-
-          return StatefulBuilder(  // You need this, notice the parameters below:
+          return StatefulBuilder(
             builder: (BuildContext context, StateSetter setState) {
               _setState = setState;
               return AlertDialog (
                 backgroundColor: Colors.black.withOpacity(0.7),
-                title: Center(child: Text(text, style: TextStyle(color: Colors.lightBlue)),),
-                actions:  <Widget>[
+                content: Container(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                      SizedBox(
+                      height: 20,
+                    ),
+                    Text(text, style: TextStyle(color: Colors.lightBlue)),
+                      ],
+                    ),
+                  ),
+                ),
+                actions: !httpRequest? null : <Widget>[
                   FlatButton(onPressed: pressed? null: (){Clipboard.setData(new ClipboardData(text:text));
                   setState((){
-                    pressed = !pressed ; // update the state of the class to show color change
+                    pressed = !pressed ;
                   });
-                  }, child: pressed? null : Text("Zkopírovat"),color: pressed ? Colors.transparent : Colors.green,)
+                  }, child: pressed? null : Text("Zkopírovat"),color: pressed ? Colors.transparent : Colors.green,),
+                  FlatButton(onPressed: translated? null : () async{translator.translate(text, from: 'ka', to: 'cs').then((s) {
+                    setState(() {
+                      text = s.text;
+                      translated = !translated;
+                    });
+                  });},
+                    child: translated? null : Text("Přeložit"),color: pressed ? Colors.transparent : Colors.green,)
                 ],
               );
             },
@@ -81,7 +101,6 @@ class _CanvasPaintingState extends State<CanvasPainting> {
         y1 = y2;
         y2 = odklad;
       }
-
       coordinates = coordinates + x1.toString() + "," + y1.toString() + "," + x2.toString() + "," + y2.toString() + "," ;
     }
     coordinates = coordinates.substring(0, coordinates.length - 1);
@@ -89,13 +108,33 @@ class _CanvasPaintingState extends State<CanvasPainting> {
   }
 
   Future _getText() async {
-    text="Loading...";
+    text="Dešifruji...";
+    httpRequest=false;
     coordinates = "";
+      setState(() {
+        tempPoints = List.from(points);
+        points.clear();
+      });
 
+    screenshotController
+        .capture()
+        .then((File image) async {
+      setState(() {
+        imagePath = image;
+        points= List.from(tempPoints);
+        tempPoints.clear();
+      });
 
+      _request();
+
+    }).catchError((onError) {
+      print(onError);
+    });
+  }
+
+  Future _request() async{
     if(points.length > 0) {
-     coordinates = _coordinates();
-     print(coordinates);
+      coordinates = _coordinates();
     }
     var request = http.MultipartRequest(
         "POST",
@@ -105,7 +144,7 @@ class _CanvasPaintingState extends State<CanvasPainting> {
     }
     request.files.add(await http.MultipartFile.fromPath(
       'image',
-      _image.path,
+      imagePath.path,
     ));
     _showAlertDialog(context);
     request.send().then((result) async {
@@ -120,9 +159,9 @@ class _CanvasPaintingState extends State<CanvasPainting> {
         else if (response.statusCode == 200)
         {
           Map mapJson = json.decode(utf8.decode(response.bodyBytes));
-          print(mapJson["text"]);
           _setState(() {
             text = mapJson["text"];
+            httpRequest = true;
           });
         }
         else{
@@ -137,23 +176,27 @@ class _CanvasPaintingState extends State<CanvasPainting> {
   }
 
   Future _getImage() async {
-    double widthScreen = MediaQuery.of(context).size.width;
-    final pickedFile = await picker.getImage(source: ImageSource.gallery, maxWidth: widthScreen);
+    widthScreen = MediaQuery.of(context).size.width;
+    heightScreen = MediaQuery.of(context).size.height;
+    final pickedFile = await picker.getImage(source: ImageSource.gallery);
+
     if (pickedFile != null) {
       _image = File(pickedFile.path);
       var decodedImage = await decodeImageFromList(_image.readAsBytesSync());
-      width= decodedImage.width;
-      height= decodedImage.height;
-      print(width);
-      print(height);
+      if(decodedImage.width + 20 < widthScreen)
+      width= decodedImage.width + 20;
+      else
+        width = decodedImage.width;
+      if(decodedImage.height + 20 < heightScreen)
+      height= decodedImage.height + 20;
+      else
+        height= decodedImage.height;
+
     }
     setState(() {
       if (pickedFile != null) {
         points.clear();
         _image = File(pickedFile.path);
-        print('_image: $_image');
-      } else {
-        print('No image selected');
       }
     });
   }
@@ -167,39 +210,40 @@ class _CanvasPaintingState extends State<CanvasPainting> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(
-        backgroundColor: Colors.white70,
         body: RepaintBoundary(
             key: globalKey,
             child: Center(
-              child: Container(
-                key: _keyImage,
-                width: width.toDouble(),
-                height: height.toDouble(),
-                decoration: BoxDecoration(
-                  image: DecorationImage(
-
-                    image: _image == null
-                        ? MemoryImage(kTransparentImage)
-                        : FileImage(_image),
-                  ),
-                ),
-                child:
-                GestureDetector(
-                  onTapDown: (details) {
-                    setState(() {
-                      RenderBox renderBox = context.findRenderObject();
-                      points.add(TouchPoints(
-                          points: renderBox.globalToLocal(details.localPosition),));
-                    });
-                  },
-                  child:                     CustomPaint(
-                    size: Size.infinite,
-                    painter: MyPainter(
-                      pointsList: points,
+              child: Screenshot(
+                controller: screenshotController,
+                child: Container(
+                  key: _keyImage,
+                  width: width.toDouble(),
+                  height: height.toDouble(),
+                  decoration: BoxDecoration(
+                    image: DecorationImage(
+                      image: _image == null
+                          ? MemoryImage(kTransparentImage)
+                          : FileImage(_image),
                     ),
                   ),
-                ),
-                ),
+                  child:
+                  GestureDetector(
+                    onTapDown: (details) {
+                      setState(() {
+                        RenderBox renderBox = context.findRenderObject();
+                        points.add(TouchPoints(
+                            points: renderBox.globalToLocal(details.localPosition),));
+                      });
+                    },
+                    child:CustomPaint(
+                      size: Size.infinite,
+                      painter: MyPainter(
+                        pointsList: points,
+                      ),
+                    ),
+                  ),
+                  ),
+              ),
               ),
             ),
         floatingActionButton: Column(
@@ -254,19 +298,13 @@ class _CanvasPaintingState extends State<CanvasPainting> {
 
 class MyPainter extends CustomPainter {
   MyPainter({this.pointsList});
-
-  //Keep track of the points tapped on the screen
   List<TouchPoints> pointsList;
   List<Offset> offsetPoints = List();
 
-  //This is where we can draw on canvas.
   @override
   void paint(Canvas canvas, Size size) {
     for (int i = 0; i < pointsList.length - 1; i= i+2) {
-      print(pointsList[i].points.dx);print(pointsList[i].points.dy);
-      print(pointsList[i+1].points.dx);print(pointsList[i+1].points.dy);
       if (pointsList[i] != null && pointsList[i + 1] != null) {
-        //Drawing line when two consecutive points are available
         canvas.drawRect(
           new Rect.fromLTRB(
               pointsList[i].points.dx, pointsList[i].points.dy, pointsList[i+1].points.dx, pointsList[i+1].points.dy
@@ -277,20 +315,15 @@ class MyPainter extends CustomPainter {
     }
   }
 
-  //Called when CustomPainter is rebuilt.
-  //Returning true because we want canvas to be rebuilt to reflect new changes.
+
   @override
   bool shouldRepaint(MyPainter oldDelegate) => true;
 }
 
-//Class to define a point touched at canvas
 class TouchPoints {
   Offset points;
   TouchPoints({this.points});
 }
-
-
-
 
 
 
