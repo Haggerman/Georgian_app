@@ -254,7 +254,7 @@ class _CanvasPaintingState extends State<CanvasPainting> {
                 backgroundColor: Colors.green,
                 onPressed: () async{await _getImage();},
                 tooltip: 'Vybrat obrazek',
-                child: Icon(Icons.add),
+                child: Icon(Icons.photo),
               ),
               SizedBox(height: 5),
               FloatingActionButton(
