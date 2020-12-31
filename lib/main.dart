@@ -11,15 +11,16 @@ import 'package:screenshot/screenshot.dart';
 import 'package:translator/translator.dart';
 
 void main() {
-  runApp(MaterialApp(home: CanvasPainting()));
+  runApp(MaterialApp(home: GeorgianApp()));
 }
 
-class CanvasPainting extends StatefulWidget {
+class GeorgianApp extends StatefulWidget {
   @override
-  _CanvasPaintingState createState() => _CanvasPaintingState();
+  _GeorgianApp createState() => _GeorgianApp();
+
 }
 
-class _CanvasPaintingState extends State<CanvasPainting> {
+class _GeorgianApp extends State<GeorgianApp> {
   ScreenshotController screenshotController = ScreenshotController();
   GlobalKey globalKey = GlobalKey();
   List<TouchPoints> points = List();
@@ -246,7 +247,7 @@ class _CanvasPaintingState extends State<CanvasPainting> {
               ),
               ),
             ),
-        floatingActionButton: Column(
+        floatingActionButton: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -256,7 +257,7 @@ class _CanvasPaintingState extends State<CanvasPainting> {
                 tooltip: 'Vybrat obrazek',
                 child: Icon(Icons.photo),
               ),
-              SizedBox(height: 5),
+              SizedBox(width: 5),
               FloatingActionButton(
                   heroTag: "erase",
                   child: Icon(Icons.clear),
@@ -267,7 +268,7 @@ class _CanvasPaintingState extends State<CanvasPainting> {
                       points.clear();
                     });
                   }),
-              SizedBox(height: 5),
+              SizedBox(width: 5),
               FloatingActionButton(
                   heroTag: "stepBack",
                   child: Icon(Icons.keyboard_backspace),
@@ -279,7 +280,7 @@ class _CanvasPaintingState extends State<CanvasPainting> {
                       points.removeLast();
                     });
                   }),
-              SizedBox(height: 5),
+              SizedBox(width: 5),
               FloatingActionButton(
                 backgroundColor: _image == null ? Colors.blueGrey.withOpacity(0.5): Colors.green,
                 onPressed: _image == null
