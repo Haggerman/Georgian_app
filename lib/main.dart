@@ -253,19 +253,21 @@ class _GeorgianApp extends State<GeorgianApp> {
                     },
                     onPanEnd: (details) {
                       setState(() {
-                            rectCount++;
-                            rectangles.add(TouchPoints(points: points[0].points));
-                            rectangles.add(TouchPoints(points: points[1].points));
-                            points.clear();
-
+                        if (points[0] != null && points[points.length - 1] !=
+                            null) {
+                          rectangles.add(TouchPoints(points: points[0].points));
+                          rectangles.add(TouchPoints(
+                              points: points[points.length - 1].points));
+                          points.clear();
                         }
+                      }
                       );
                     },
                     child:CustomPaint(
                       size: Size.infinite,
                       painter: MyPainter(
-                        pointsList: points,
-                        rectangles: rectangles
+                        rectangles: rectangles,
+                        pointsList: points
                       ),
                     ),
                   ),
