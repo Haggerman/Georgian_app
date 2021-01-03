@@ -25,6 +25,7 @@ class _GeorgianApp extends State<GeorgianApp> {
   GlobalKey globalKey = GlobalKey();
   List<TouchPoints> points = List();
   List<TouchPoints> tempPoints = List();
+  List<TouchPoints> rectangles = List();
   final translator = GoogleTranslator();
   File _image;
   File imagePath;
@@ -38,6 +39,7 @@ class _GeorgianApp extends State<GeorgianApp> {
   String coordinates ="";
   final picker = ImagePicker();
   double heightScreen;
+  int rectCount = 1;
 
   _showAlertDialog(BuildContext context) {
     var pressed = false ;
@@ -86,11 +88,11 @@ class _GeorgianApp extends State<GeorgianApp> {
   }
 
   String _coordinates(){
-    for (int i = 0; i < points.length-1; i=i+2) {
-      int x1 = (points[i].points.dx).toInt();
-      int x2 = (points[i+1].points.dx).toInt();
-      int y1 = (points[i].points.dy).toInt();
-      int y2 = (points[i+1].points.dy).toInt();
+    for (int i = 0; i < rectangles.length-1; i=i+2) {
+      int x1 = (rectangles[i].points.dx).toInt();
+      int x2 = (rectangles[i+1].points.dx).toInt();
+      int y1 = (rectangles[i].points.dy).toInt();
+      int y2 = (rectangles[i+1].points.dy).toInt();
       int odklad;
       if(x2<x1){
         odklad = x1;
@@ -113,8 +115,8 @@ class _GeorgianApp extends State<GeorgianApp> {
     httpRequest=false;
     coordinates = "";
       setState(() {
-        tempPoints = List.from(points);
-        points.clear();
+        tempPoints = List.from(rectangles);
+        rectangles.clear();
       });
 
     screenshotController
@@ -122,7 +124,7 @@ class _GeorgianApp extends State<GeorgianApp> {
         .then((File image) async {
       setState(() {
         imagePath = image;
-        points= List.from(tempPoints);
+        rectangles= List.from(tempPoints);
         tempPoints.clear();
       });
 
@@ -134,7 +136,7 @@ class _GeorgianApp extends State<GeorgianApp> {
   }
 
   Future _request() async{
-    if(points.length > 0) {
+    if(rectangles.length > 0) {
       coordinates = _coordinates();
     }
     var request = http.MultipartRequest(
@@ -196,7 +198,7 @@ class _GeorgianApp extends State<GeorgianApp> {
     }
     setState(() {
       if (pickedFile != null) {
-        points.clear();
+        rectangles.clear();
         _image = File(pickedFile.path);
       }
     });
@@ -229,17 +231,41 @@ class _GeorgianApp extends State<GeorgianApp> {
                   ),
                   child:
                   GestureDetector(
-                    onTapDown: (details) {
+                    onPanUpdate: (details) {
+                      setState(() {
+                        RenderBox renderBox = context.findRenderObject();
+
+                        if(details.localPosition.dx > 0 && details.localPosition.dx < width && details.localPosition.dy > 0 && details.localPosition.dy < height) {
+                          points.add(TouchPoints(
+                            points: renderBox.globalToLocal(
+                                details.localPosition),));
+                          if (points.length == 3)
+                            points.removeAt(points.length - 2);
+                        }
+                      });
+                    },
+                    onPanStart: (details) {
                       setState(() {
                         RenderBox renderBox = context.findRenderObject();
                         points.add(TouchPoints(
-                            points: renderBox.globalToLocal(details.localPosition),));
+                          points: renderBox.globalToLocal(details.localPosition),));
                       });
+                    },
+                    onPanEnd: (details) {
+                      setState(() {
+                            rectCount++;
+                            rectangles.add(TouchPoints(points: points[0].points));
+                            rectangles.add(TouchPoints(points: points[1].points));
+                            points.clear();
+
+                        }
+                      );
                     },
                     child:CustomPaint(
                       size: Size.infinite,
                       painter: MyPainter(
                         pointsList: points,
+                        rectangles: rectangles
                       ),
                     ),
                   ),
@@ -262,10 +288,10 @@ class _GeorgianApp extends State<GeorgianApp> {
                   heroTag: "erase",
                   child: Icon(Icons.clear),
                   tooltip: "Erase",
-                  backgroundColor: points.length == 0 ? Colors.blueGrey.withOpacity(0.5): Colors.green,
-                  onPressed: points.length == 0 ? null : () {
+                  backgroundColor: rectangles.length == 0 ? Colors.blueGrey.withOpacity(0.5): Colors.green,
+                  onPressed: rectangles.length == 0 ? null : () {
                     setState(() {
-                      points.clear();
+                      rectangles.clear();
                     });
                   }),
               SizedBox(width: 5),
@@ -273,11 +299,11 @@ class _GeorgianApp extends State<GeorgianApp> {
                   heroTag: "stepBack",
                   child: Icon(Icons.keyboard_backspace),
                   tooltip: "Step back",
-                  backgroundColor: points.length < 2 ? Colors.blueGrey.withOpacity(0.5): Colors.green,
-                  onPressed: points.length < 2 ? null : () {
+                  backgroundColor: rectangles.length < 2 ? Colors.blueGrey.withOpacity(0.5): Colors.green,
+                  onPressed: rectangles.length < 2 ? null : () {
                     setState(() {
-                      points.removeLast();
-                      points.removeLast();
+                      rectangles.removeLast();
+                      rectangles.removeLast();
                     });
                   }),
               SizedBox(width: 5),
@@ -298,22 +324,36 @@ class _GeorgianApp extends State<GeorgianApp> {
 }
 
 class MyPainter extends CustomPainter {
-  MyPainter({this.pointsList});
+  MyPainter({this.pointsList, this.rectangles});
   List<TouchPoints> pointsList;
+  List<TouchPoints> rectangles;
   List<Offset> offsetPoints = List();
 
   @override
   void paint(Canvas canvas, Size size) {
-    for (int i = 0; i < pointsList.length - 1; i= i+2) {
-      if (pointsList[i] != null && pointsList[i + 1] != null) {
-        canvas.drawRect(
-          new Rect.fromLTRB(
-              pointsList[i].points.dx, pointsList[i].points.dy, pointsList[i+1].points.dx, pointsList[i+1].points.dy
-          ),
-          new Paint()..color = new Color.fromRGBO(0, 127, 255, 0.7)
-        );
+      for (int i = 0; i < pointsList.length-1; i = i + 2) {
+        if (pointsList[i] != null && pointsList[i + 1] != null) {
+          canvas.drawRect(
+              new Rect.fromLTRB(
+                  pointsList[i].points.dx, pointsList[i].points.dy,
+                  pointsList[i + 1].points.dx, pointsList[i + 1].points.dy
+              ),
+              new Paint()..color = new Color.fromRGBO(0, 127, 255, 0.7)
+          );
+        }
       }
-    }
+
+      for (int i = 0; i < rectangles.length-1; i = i + 2) {
+        if (rectangles[i] != null && rectangles[i + 1] != null) {
+          canvas.drawRect(
+              new Rect.fromLTRB(
+                  rectangles[i].points.dx, rectangles[i].points.dy,
+                  rectangles[i + 1].points.dx, rectangles[i + 1].points.dy
+              ),
+              new Paint()..color = new Color.fromRGBO(0, 127, 255, 0.7)
+          );
+        }
+      }
   }
 
 
@@ -325,6 +365,7 @@ class TouchPoints {
   Offset points;
   TouchPoints({this.points});
 }
+
 
 
 
